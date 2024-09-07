@@ -19,8 +19,9 @@ const session={};
 
 app.post('/hello',async(req,res)=>{
     let from='';
-    
-    from=req.body.From.replace('whatsapp:','');
+
+    if(req.body.From){
+        from=req.body.From.replace('whatsapp:','');
     console.log(from);
     if(req.body.MediaUrl0){
         if(!session[from])
@@ -46,6 +47,13 @@ app.post('/hello',async(req,res)=>{
     
     if(response !== '.')
     await sendWhatsappmessage(from, response);
+
+    }
+    else{
+        res.send("From pdf ai")
+    }
+    
+    
 
 
 })
