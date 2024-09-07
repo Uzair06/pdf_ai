@@ -5,6 +5,7 @@ import express from "express"
 import twilio from "twilio"
 import document_download from "./document_download.js"
 import gemini from "./gemini.js"
+import delete_file from "./delete_file.js"
 
 
 const authToken = process.env.TWILIO_AUTH_TOKEN
@@ -14,7 +15,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 
- let session={};
+const session={};
 
 app.post('/hello',async(req,res)=>{
     let from='';
@@ -42,13 +43,19 @@ app.post('/hello',async(req,res)=>{
 
     const message = req.body.Body;
     const response = await handlemessage(message,from)
-
-await sendWhatsappmessage(from, response);
+    
+    if(response !== '.')
+    await sendWhatsappmessage(from, response);
 
 
 })
 
 const handlemessage = async (message, from) =>{
+    if(message === 'start'){
+        delete_file(session[from].contentType, from)
+        session[from].step = 'upload_request'
+    }
+
     if(!session[from]){
         session[from] = { step:'upload_request' }
     }
@@ -63,22 +70,40 @@ const handlemessage = async (message, from) =>{
         case 'upload_request':
             if(message)
             {
-                session[from].step = 'process_file'
-                return `Please upload PDF, JPEG or PNG`
+                session[from].step = 'enter_prompt'
+                return `Hi! Welcome to DocumentAI📝\n\nUse this Bot to take help from AI regarding your Documents in seconds.\n\n*Please upload a PDF, JPEG or PNG File and wait to enter the prompt*\n\n⚠️Note:\nUploading a document will start a single session.\nTo work with a different document you need to start a new session by typing 'start'\n\n*This Chatbot is still in beta phase so be patient while we process everything.*`
             }
-            else{
-                if(message === '' && session[from].contentLength <= 1000000000 && (session[from].contentType === 'image/jpeg' || session[from].contentType === 'image/png' || session[from].contentType === 'application/pdf')){
+            else if(message === '' && session[from].contentLength <= 1000000000 && (session[from].contentType === 'image/jpeg' || session[from].contentType === 'image/png' || session[from].contentType === 'application/pdf')){
                     await document_download(session[from].mediaUrl, from, session[from].contentType)
-                    const response = await gemini(from, "Please tell me what this is", session[from].contentType)
-                    return response
-            }
+                     session[from].step = 'process_file'
+                     return `Document uploaded successfully✅\n\nPlease enter what u want to do with this document. Give as much as details as u can in your prompt\n\n*Then wait for few seconds while we fetch your response from AI.*`
+                    }
+    
+                    else if (session[from].contentType >=1000000000 || (session[from].contentType !== 'image/jpeg' || session[from].contentType !== 'image/png' || session[from].contentType !== 'application/pdf')){
+        return `Invalid Input. Allowed files : PDF, JPEG or PNG of less than 1GB`;
     }
-    case 'process_file':
+
+    case 'enter_prompt':
         if(message === '' && session[from].contentLength <= 1000000000 && (session[from].contentType === 'image/jpeg' || session[from].contentType === 'image/png' || session[from].contentType === 'application/pdf')){
             await document_download(session[from].mediaUrl, from, session[from].contentType)
-            const response = await gemini(from, "Please tell me what this is", session[from].contentType)
-            return response
+            session[from].step = 'process_file'
+            return `Document uploaded successfully✅\n\nPlease enter what u want to do with this document. Give as much as details as u can in your prompt\n\n*Then wait for few seconds while we fetch your response from AI.*`
     }
+    else if (message !== '' || session[from].contentType >=1000000000 || (session[from].contentType !== 'image/jpeg' || session[from].contentType !== 'image/png' || session[from].contentType !== 'application/pdf')){
+        return `Invalid Input. Allowed files : PDF, JPEG or PNG of less than 1GB`;
+    }
+    
+
+    case 'process_file':
+        if(message !== ''){
+            const response = await gemini(from, message, session[from].contentType)
+            return response;
+        }
+        else{
+            return `Invalid Input. Please enter the prompt to proceed.`
+        }
+
+    default: return `.`
 
 }}
 
@@ -95,7 +120,7 @@ try{
     };
 
     const message = await client.messages.create(messageOptions);
-    console.log(`Mesaage sent successfully. SID: ${message.sid}`);
+    console.log(`Message sent successfully. SID: ${message.sid}`);
 
 }
 catch(error){
