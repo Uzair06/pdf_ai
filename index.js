@@ -6,6 +6,7 @@ import twilio from "twilio"
 import document_download from "./document_download.js"
 import gemini from "./gemini.js"
 import delete_file from "./delete_file.js"
+import uploadFile from "./uploadFile.js"
 
 
 const authToken = process.env.TWILIO_AUTH_TOKEN
@@ -55,11 +56,6 @@ app.post('/hello',async(req,res)=>{
 })
 
 const handlemessage = async (message, from) =>{
-    if(message === 'start'){
-        delete_file(session[from].contentType, from)
-        session[from].step = 'upload_request'
-    }
-
     if(!session[from]){
         session[from] = { step:'upload_request' }
     }
@@ -69,6 +65,11 @@ const handlemessage = async (message, from) =>{
             session[from].step = 'upload_request' 
        }
     }
+    if(message === 'start'){
+        session[from].step = 'upload_request'
+    }
+
+    
     switch(session[from].step)
     {
         case 'upload_request':
@@ -80,31 +81,38 @@ const handlemessage = async (message, from) =>{
             else if(message === '' && session[from].contentLength <= 1000000000 && (session[from].contentType === 'image/jpeg' || session[from].contentType === 'image/png' || session[from].contentType === 'application/pdf')){
                     await document_download(session[from].mediaUrl, from, session[from].contentType)
                      session[from].step = 'process_file'
+                     session[from].uri = await uploadFile(from, session[from].contentType)
+                     console.log("URI ->",session[from].uri)
+                     delete_file(session[from].contentType, from)
                      return `Document uploaded successfully✅\n\nPlease enter what u want to do with this document. Give as much as details as u can in your prompt\n\n*Then wait for few seconds while we fetch your response from AI.*`
                     }
     
                     else if (session[from].contentType >=1000000000 || (session[from].contentType !== 'image/jpeg' || session[from].contentType !== 'image/png' || session[from].contentType !== 'application/pdf')){
-        return `Invalid Input. Allowed files : PDF, JPEG or PNG of less than 1GB`;
+        return `Invalid Input. Allowed files : PDF, JPEG or PNG`;
     }
 
     case 'enter_prompt':
         if(message === '' && session[from].contentLength <= 1000000000 && (session[from].contentType === 'image/jpeg' || session[from].contentType === 'image/png' || session[from].contentType === 'application/pdf')){
             await document_download(session[from].mediaUrl, from, session[from].contentType)
+
             session[from].step = 'process_file'
+            session[from].uri = await uploadFile(from, session[from].contentType)
+            console.log("URI ->",session[from].uri)
+            delete_file(session[from].contentType, from)
+
             return `Document uploaded successfully✅\n\nPlease enter what u want to do with this document. Give as much as details as u can in your prompt\n\n*Then wait for few seconds while we fetch your response from AI.*`
     }
     else if (message !== '' || session[from].contentType >=1000000000 || (session[from].contentType !== 'image/jpeg' || session[from].contentType !== 'image/png' || session[from].contentType !== 'application/pdf')){
-        return `Invalid Input. Allowed files : PDF, JPEG or PNG of less than 1GB`;
+        return `Invalid Input. Allowed files : PDF, JPEG or PNG`;
     }
     
 
 
     case 'process_file':
         if(message !== ''){
-            const response = await gemini(from, message, session[from].contentType)
+            const response = await gemini(message,session[from].uri)
             if(response === ".")
             {
-                delete_file(session[from].contentType, from)
                 session[from].step = 'enter_prompt'
                 return "Your Document was not processed by AI due to illicit content. Please upload a different document to start again."
             }
