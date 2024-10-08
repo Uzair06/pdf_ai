@@ -30,19 +30,26 @@ const gemini = async (from, prompt, contentType) => {
     console.log(`Uploaded file ${uploadResponse.file.displayName} as:${uploadResponse.file.uri}`);
     const getResponse = await fileManager.getFile(uploadResponse.file.name);
     console.log(`Retrieved file ${getResponse.displayName} as ${getResponse.uri}`);
-
-    const model = genAI.getGenerativeModel({model: "gemini-1.5-flash-latest"});
-    const result = await model.generateContent([
+    try {
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash-latest",
+      });
+      const result = await model.generateContent([
         {
-            fileData: {
-                mimeType: uploadResponse.file.mimeType,
-                fileUri: uploadResponse.file.uri
-            }
+          fileData: {
+            mimeType: uploadResponse.file.mimeType,
+            fileUri: uploadResponse.file.uri,
+          },
         },
-        {text: prompt},
+        { text: prompt },
+      ]);
+      return result.response.text();
+    } catch (error) {
+      console.log("Error from Gemini API while reading Document -->", error);
+      return ".";
+    }
 
-    ]);
-    return result.response.text()
+    
 
 
 }

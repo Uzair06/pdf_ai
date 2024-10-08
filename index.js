@@ -21,7 +21,7 @@ app.post('/hello',async(req,res)=>{
     let from='';
 
     if(req.body.From){
-        from=req.body.From.replace('whatsapp:','');
+    from=req.body.From.replace('whatsapp:','');
     console.log(from);
     if(req.body.MediaUrl0){
         if(!session[from])
@@ -50,12 +50,8 @@ app.post('/hello',async(req,res)=>{
 
     }
     else{
-        res.send("From pdf ai")
+        res.send("This message is for cron job from pdf ai")
     }
-    
-    
-
-
 })
 
 const handlemessage = async (message, from) =>{
@@ -102,10 +98,19 @@ const handlemessage = async (message, from) =>{
     }
     
 
+
     case 'process_file':
         if(message !== ''){
             const response = await gemini(from, message, session[from].contentType)
+            if(response === ".")
+            {
+                delete_file(session[from].contentType, from)
+                session[from].step = 'enter_prompt'
+                return "Your Document was not processed by AI due to illicit content. Please upload a different document to start again."
+            }
+
             return response;
+
         }
         else{
             return `Invalid Input. Please enter the prompt to proceed.`
